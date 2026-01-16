@@ -25,6 +25,7 @@ export interface Comment {
   author: string;
   avatar: string;
   text: string;
+  author_id?: string;
   timestamp: string;
 }
 
@@ -58,7 +59,8 @@ export interface Task {
   projectLeadId: string; // Responsible for the project
   subTasks: SubTask[]; // Designados with specific tasks and progress
   dueDate: string;
-  sectorId: string;
+  sectors?: string[]; // New: Multiple sectors support
+  sectorId?: string; // Search legacy, to be deprecated
   comments?: Comment[];
 }
 

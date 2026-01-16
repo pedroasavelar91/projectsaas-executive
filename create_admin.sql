@@ -9,8 +9,8 @@ create extension if not exists "pgcrypto";
 DO $$
 DECLARE
   -- 🛠 CONFIGURATION: Change these!
-  target_email text := 'admin@empresa.com.br';
-  target_password text := 'admin123';
+  target_email text := 'admin@medmais.com';
+  target_password text := 'wrJ1dW4IjgfPDcRr';
   
   -- Internal variables
   new_uid uuid := uuid_generate_v4();
@@ -18,11 +18,25 @@ DECLARE
 BEGIN
   -- Check if user exists to avoid errors
   IF EXISTS (SELECT 1 FROM auth.users WHERE email = target_email) THEN
-    RAISE NOTICE 'User % already exists. Promoting to ADMIN instead.', target_email;
+    RAISE NOTICE 'User % already exists. Checking profile...', target_email;
     
-    UPDATE public.profiles 
-    SET role = 'ADMIN' 
-    WHERE email = target_email;
+    -- Get the User ID
+    SELECT id INTO new_uid FROM auth.users WHERE email = target_email;
+
+    -- Upsert Profile (Create if missing, Update if exists)
+    INSERT INTO public.profiles (id, email, name, role, joined_at, corporation)
+    VALUES (
+      new_uid,
+      target_email,
+      split_part(target_email, '@', 1),
+      'ADMIN',
+      to_char(now(), 'Mon YYYY'),
+      'Corporação Unificada'
+    )
+    ON CONFLICT (id) DO UPDATE
+    SET role = 'ADMIN';
+    
+    RAISE NOTICE 'Admin profile secured for: %', target_email;
     
   ELSE
     -- Generate Bcrypt Hash (Supabase standard)

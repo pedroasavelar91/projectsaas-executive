@@ -1,50 +1,129 @@
+
 import React, { useState } from 'react';
 import { User, UserRole, Sector } from '../types';
+import { api } from '../lib/api';
 
 interface TeamManagementProps {
   sectors: Sector[];
   onUpdateSectors: (sectors: Sector[]) => void;
+  onDeleteSector: (sectorId: string) => void;
   team: User[];
   onUpdateTeam: (team: User[]) => void;
 }
 
-const TeamManagement: React.FC<TeamManagementProps> = ({ sectors, onUpdateSectors, team, onUpdateTeam }) => {
+const TeamManagement: React.FC<TeamManagementProps> = ({ sectors, onUpdateSectors, onDeleteSector, team, onUpdateTeam }) => {
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null); // New state for editing
   const [newSectorName, setNewSectorName] = useState('');
-  const [newUser, setNewUser] = useState({ name: '', email: '', role: UserRole.USER, selectedSectors: [] as string[] });
+  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: UserRole.USER, selectedSectors: [] as string[] });
 
-  // Simulated Logs for Production Audit
-  const [logs, setLogs] = useState([
-    { id: 1, action: 'Sincronização iniciada', time: 'Há 2 min', type: 'system' },
-    { id: 2, action: 'Membro João Santos atualizado', time: 'Há 15 min', type: 'user' },
-  ]);
+  // Add state for current user/corp - assuming first user is representative of context or handled by parent
+  const [corporationName, setCorporationName] = useState(team[0]?.corporation || 'Minha Corporação');
+  const [isEditingCorp, setIsEditingCorp] = useState(false);
 
-  const handleAddUser = (e: React.FormEvent) => {
+  // Handlers
+  const handleUpdateCorpName = async () => {
+    if (!corporationName.trim()) return;
+    try {
+      const adminId = team.find(u => u.role === UserRole.ADMIN)?.id;
+      if (adminId) {
+        await api.team.updateCorporationName(corporationName, adminId);
+        setIsEditingCorp(false);
+        onUpdateTeam(team.map(u => u.id === adminId ? { ...u, corporation: corporationName } : u));
+      }
+    } catch (e) {
+      console.error("Failed to update corp name", e);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    if (!confirm("Tem certeza que deseja remover este usuário?")) return;
+    try {
+      await api.team.delete(userId);
+      onUpdateTeam(team.filter(u => u.id !== userId));
+    } catch (e) {
+      console.error("Failed to delete user", e);
+      alert("Erro ao excluir usuário.");
+    }
+  };
+
+  const handleEditUser = (user: User) => {
+    setNewUser({
+      name: user.name,
+      email: user.email,
+      password: '', // Password not editable here
+      role: user.role,
+      selectedSectors: user.sectors
+    });
+    setEditingUserId(user.id);
+    setShowAddModal(true);
+  };
+
+  const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Ideally this would invite the user via email. 
-    // Since we don't have an email service, we just add it to the view.
-    // Real auth user must sign up themselves.
-    const user: User = {
-      id: Math.random().toString(36).substring(7),
-      name: newUser.name,
-      email: newUser.email,
-      role: newUser.role,
-      avatar: `https://picsum.photos/seed/${newUser.name}/100/100`,
-      joinedAt: new Date().toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }),
-      corporation: 'Corporação Unificada',
-      sectors: newUser.selectedSectors
-    };
-    const updatedTeam = [...team, user];
-    onUpdateTeam(updatedTeam);
-    setLogs([{ id: Date.now(), action: `Novo acesso: ${user.name}`, time: 'Agora', type: 'auth' }, ...logs]);
-    setShowAddModal(false);
-    setNewUser({ name: '', email: '', role: UserRole.USER, selectedSectors: [] });
+
+    if (editingUserId) {
+      // Update Logic
+      try {
+        await api.team.update(editingUserId, {
+          name: newUser.name,
+          role: newUser.role as UserRole,
+          sectors: newUser.selectedSectors
+        });
+        alert("Usuário atualizado com sucesso!");
+        onUpdateTeam(team.map(u => u.id === editingUserId ? { ...u, name: newUser.name, role: newUser.role as UserRole, sectors: newUser.selectedSectors } : u));
+        setShowAddModal(false);
+        setEditingUserId(null);
+        setNewUser({ name: '', email: '', password: '', role: UserRole.USER, selectedSectors: [] });
+      } catch (e) {
+        console.error(e);
+        alert("Erro ao atualizar usuário.");
+      }
+      return;
+    }
+
+    if (!newUser.password || newUser.password.length < 6) {
+      alert("A senha deve ter pelo menos 6 caracteres.");
+      return;
+    }
+
+    try {
+      // Call create instead of invite
+      await api.team.create(newUser, corporationName);
+
+      alert(`Usuário criado com sucesso!\n\nCredenciais de Acesso:\nE-mail: ${newUser.email}\nSenha: ${newUser.password}`);
+
+      setShowAddModal(false);
+      setNewUser({ name: '', email: '', password: '', role: UserRole.USER, selectedSectors: [] });
+
+      // Optimistic Update (Temporary until refresh)
+      const tempUser: User = {
+        id: 'temp-' + Date.now(),
+        name: newUser.name || newUser.email.split('@')[0],
+        email: newUser.email,
+        role: newUser.role as UserRole,
+        avatar: '',
+        joinedAt: new Date().toLocaleDateString(),
+        corporation: corporationName,
+        sectors: newUser.selectedSectors,
+        status: 'APPROVED' // Enforced as approved since created by admin
+      };
+      onUpdateTeam([...team, tempUser]);
+
+    } catch (e: any) {
+      console.error("Create user failed", e);
+      alert("Erro ao criar usuário: " + (e.message || "Verifique se o email já existe."));
+    }
   };
 
   const handleAddSector = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSectorName.trim()) return;
-    const updatedSectors = [...sectors, { id: 's' + (sectors.length + 1), name: newSectorName }];
+    const updatedSectors = [...sectors, {
+      id: 's' + (sectors.length + 1) + '-' + Date.now(), // Better ID uniqueness
+      name: newSectorName,
+      corporation: corporationName // CRITICAL: Pass corporation
+    }];
     onUpdateSectors(updatedSectors);
     setNewSectorName('');
   };
@@ -60,6 +139,27 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ sectors, onUpdateSector
 
   return (
     <div className="p-8 max-w-[1200px] mx-auto w-full flex flex-col gap-8">
+      {/* Header with Corp Name Edit */}
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex items-center gap-4">
+          {isEditingCorp ? (
+            <div className="flex items-center gap-2">
+              <input
+                value={corporationName}
+                onChange={e => setCorporationName(e.target.value)}
+                className="text-2xl font-black text-slate-800 bg-white border border-slate-300 rounded-lg px-2 py-1"
+              />
+              <button onClick={handleUpdateCorpName} className="text-green-600 hover:text-green-700 font-bold text-sm">SALVAR</button>
+            </div>
+          ) : (
+            <h2 className="text-3xl font-black text-slate-800 tracking-tight">{corporationName}</h2>
+          )}
+          <button onClick={() => setIsEditingCorp(!isEditingCorp)} className="text-slate-400 hover:text-primary">
+            <span className="material-symbols-outlined">edit</span>
+          </button>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 flex flex-col gap-8">
           {/* Members Table */}
@@ -81,6 +181,7 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ sectors, onUpdateSector
                     <th className="px-8 py-4">Nome / Portal</th>
                     <th className="px-8 py-4">Alocação</th>
                     <th className="px-8 py-4">Nível</th>
+                    <th className="px-8 py-4 text-right">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -88,9 +189,9 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ sectors, onUpdateSector
                     <tr key={member.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="px-8 py-5">
                         <div className="flex items-center gap-3">
-                          <img src={member.avatar} className="size-9 rounded-full object-cover border" alt="" />
+                          <img src={member.avatar || 'https://i.pravatar.cc/150'} className="size-9 rounded-full object-cover border" alt="" />
                           <div className="flex flex-col">
-                            <span className="text-sm font-bold text-slate-900">{member.name}</span>
+                            <span className="text-sm font-bold text-slate-900">{member.name || 'Usuário'}</span>
                             <span className="text-[10px] text-slate-400 font-bold">{member.email}</span>
                           </div>
                         </div>
@@ -109,29 +210,26 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ sectors, onUpdateSector
                           {member.role}
                         </span>
                       </td>
+                      <td className="px-8 py-5 text-right">
+                        <button
+                          onClick={() => handleEditUser(member)}
+                          className="text-slate-300 hover:text-primary transition-colors mr-2"
+                          title="Editar Usuário"
+                        >
+                          <span className="material-symbols-outlined">edit</span>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteUser(member.id)}
+                          className="text-slate-300 hover:text-red-500 transition-colors"
+                          title="Remover Usuário"
+                        >
+                          <span className="material-symbols-outlined">delete</span>
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
-          </div>
-
-          {/* System Logs */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-soft p-8">
-            <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary">analytics</span>
-              Logs de Auditoria (Produção)
-            </h3>
-            <div className="space-y-4">
-              {logs.map(log => (
-                <div key={log.id} className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
-                  <div className="flex items-center gap-3">
-                    <div className={`size-2 rounded-full ${log.type === 'system' ? 'bg-blue-400' : 'bg-emerald-400'}`}></div>
-                    <span className="text-xs font-bold text-slate-600">{log.action}</span>
-                  </div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">{log.time}</span>
-                </div>
-              ))}
             </div>
           </div>
         </div>
@@ -143,7 +241,10 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ sectors, onUpdateSector
               {sectors.map(s => (
                 <div key={s.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl group border border-slate-100">
                   <span className="text-xs font-bold text-slate-600 uppercase tracking-tight">{s.name}</span>
-                  <button className="text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100">
+                  <button
+                    onClick={() => onDeleteSector(s.id)}
+                    className="text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                  >
                     <span className="material-symbols-outlined text-sm">delete</span>
                   </button>
                 </div>
@@ -180,16 +281,21 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ sectors, onUpdateSector
 
       {showAddModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 flex flex-col gap-6">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 flex flex-col gap-6 scale-in-center">
             <div className="flex justify-between items-center">
-              <h3 className="text-xl font-black text-slate-900">Novo Acesso</h3>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600">
+              <h3 className="text-xl font-black text-slate-900">{editingUserId ? 'Editar Usuário' : 'Novo Acesso'}</h3>
+              <button onClick={() => { setShowAddModal(false); setEditingUserId(null); }} className="text-slate-400 hover:text-slate-600">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
             <form onSubmit={handleAddUser} className="flex flex-col gap-5">
-              <input className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 px-4 text-sm" placeholder="Nome Completo" required value={newUser.name} onChange={e => setNewUser({ ...newUser, name: e.target.value })} />
-              <input className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 px-4 text-sm" placeholder="E-mail Corporativo" type="email" required value={newUser.email} onChange={e => setNewUser({ ...newUser, email: e.target.value })} />
+              <div className="flex flex-col gap-3">
+                <input className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 px-4 text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all" placeholder="Nome Completo (Opcional)" value={newUser.name} onChange={e => setNewUser({ ...newUser, name: e.target.value })} />
+                <input className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 px-4 text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all disabled:opacity-50" placeholder="E-mail Corporativo" type="email" required disabled={!!editingUserId} value={newUser.email} onChange={e => setNewUser({ ...newUser, email: e.target.value })} />
+                {!editingUserId && (
+                  <input className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 px-4 text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all" placeholder="Senha de Acesso (Min. 6 caracteres)" type="password" required value={newUser.password} onChange={e => setNewUser({ ...newUser, password: e.target.value })} minLength={6} />
+                )}
+              </div>
 
               <div className="flex flex-col gap-2">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Setores de Atuação</label>
@@ -200,8 +306,8 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ sectors, onUpdateSector
                       type="button"
                       onClick={() => toggleSectorInUser(s.id)}
                       className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all border ${newUser.selectedSectors.includes(s.id)
-                          ? 'bg-primary text-white border-primary shadow-md'
-                          : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                        ? 'bg-primary text-white border-primary shadow-md'
+                        : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
                         }`}
                     >
                       {s.name}
@@ -210,12 +316,12 @@ const TeamManagement: React.FC<TeamManagementProps> = ({ sectors, onUpdateSector
                 </div>
               </div>
 
-              <select className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 px-4 text-sm font-bold text-slate-700" value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value as UserRole })}>
+              <select className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 px-4 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-primary/20" value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value as UserRole })}>
                 <option value={UserRole.USER}>Acesso Colaborador</option>
                 <option value={UserRole.ADMIN}>Administrador Estratégico</option>
               </select>
               <button type="submit" className="bg-primary text-white font-bold py-4 rounded-xl shadow-lg hover:bg-primary-dark transition-all transform active:scale-95 uppercase text-xs tracking-widest">
-                Confirmar e Habilitar Acesso
+                {editingUserId ? 'Salvar Alterações' : 'Criar Usuário'}
               </button>
             </form>
           </div>

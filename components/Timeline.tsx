@@ -29,16 +29,8 @@ const Timeline: React.FC<TimelineProps> = ({ tasks, todos, onUpdateTask, sectors
         type: 'task',
         date: t.dueDate,
         originalTask: t
-      })),
-      ...todos.map(todo => ({
-        id: todo.id,
-        name: `[PESSOAL] ${todo.text}`,
-        owner: 'Você',
-        status: todo.completed ? 'Concluído' : 'Pendente',
-        type: 'todo',
-        date: todo.dueDate,
-        originalTask: null
       }))
+      // Todos removed as per request
     ];
 
     return items.filter(item => {
@@ -63,7 +55,7 @@ const Timeline: React.FC<TimelineProps> = ({ tasks, todos, onUpdateTask, sectors
 
   const updateSubTaskProgress = (stId: string, val: number) => {
     if (!selectedTask) return;
-    const updatedSubTasks = selectedTask.subTasks.map(st => 
+    const updatedSubTasks = selectedTask.subTasks.map(st =>
       st.id === stId ? { ...st, progress: val } : st
     );
     const updated = { ...selectedTask, subTasks: updatedSubTasks };
@@ -102,7 +94,7 @@ const Timeline: React.FC<TimelineProps> = ({ tasks, todos, onUpdateTask, sectors
           <h3 className="text-2xl font-extrabold text-slate-900 tracking-tight">Cronograma Unificado</h3>
           <p className="text-slate-500 text-sm mt-0.5">Gestão temporal com edição via calendário</p>
         </div>
-        
+
         <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-100">
           {[
             { id: 'all', label: 'Todos', icon: 'list' },
@@ -110,12 +102,11 @@ const Timeline: React.FC<TimelineProps> = ({ tasks, todos, onUpdateTask, sectors
             { id: 'on-track', label: 'Em Dia', icon: 'check_circle' },
             { id: 'completed', label: 'Concluídos', icon: 'verified' }
           ].map(f => (
-            <button 
-              key={f.id} 
+            <button
+              key={f.id}
               onClick={() => setFilter(f.id as any)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${
-                filter === f.id ? 'bg-primary text-white shadow-md' : 'text-slate-500 hover:bg-white'
-              }`}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${filter === f.id ? 'bg-primary text-white shadow-md' : 'text-slate-500 hover:bg-white'
+                }`}
             >
               <span className="material-symbols-outlined text-sm">{f.icon}</span>
               {f.label}
@@ -132,11 +123,11 @@ const Timeline: React.FC<TimelineProps> = ({ tasks, todos, onUpdateTask, sectors
           </div>
           <div className="flex-1 overflow-y-auto custom-scrollbar">
             {displayTasks.map((task, i) => (
-              <div 
-                key={i} 
+              <div
+                key={i}
                 className="h-16 flex items-center px-6 border-b border-slate-50 transition-colors group hover:bg-slate-50"
               >
-                <div 
+                <div
                   className="flex-1 min-w-0 cursor-pointer"
                   onClick={() => task.originalTask && setSelectedTask(task.originalTask)}
                 >
@@ -144,21 +135,21 @@ const Timeline: React.FC<TimelineProps> = ({ tasks, todos, onUpdateTask, sectors
                   <p className="text-[11px] text-slate-400 font-medium">{task.owner}</p>
                 </div>
                 <div className="w-32 flex justify-end group/date">
-                   {task.type === 'task' ? (
-                     <div className="relative">
-                        <input 
-                          type="date"
-                          value={task.date}
-                          onChange={(e) => handleDateChange(task.id, e.target.value, 'task')}
-                          className="bg-transparent border-none text-[10px] font-black text-slate-600 focus:ring-0 outline-none w-[100px] text-right cursor-pointer hover:text-primary transition-colors"
-                        />
-                        <span className="material-symbols-outlined text-[12px] text-slate-300 absolute -right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover/date:opacity-100">calendar_month</span>
-                     </div>
-                   ) : (
-                     <span className="text-[10px] font-black text-slate-400">
-                        {new Date(task.date).toLocaleDateString('pt-BR')}
-                     </span>
-                   )}
+                  {task.type === 'task' ? (
+                    <div className="relative">
+                      <input
+                        type="date"
+                        value={task.date}
+                        onChange={(e) => handleDateChange(task.id, e.target.value, 'task')}
+                        className="bg-transparent border-none text-[10px] font-black text-slate-600 focus:ring-0 outline-none w-[100px] text-right cursor-pointer hover:text-primary transition-colors"
+                      />
+                      <span className="material-symbols-outlined text-[12px] text-slate-300 absolute -right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover/date:opacity-100">calendar_month</span>
+                    </div>
+                  ) : (
+                    <span className="text-[10px] font-black text-slate-400">
+                      {new Date(task.date).toLocaleDateString('pt-BR')}
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
@@ -177,7 +168,7 @@ const Timeline: React.FC<TimelineProps> = ({ tasks, todos, onUpdateTask, sectors
             <div className="flex-1 relative">
               {displayTasks.map((task, i) => (
                 <div key={i} className="h-16 flex items-center relative">
-                  <div 
+                  <div
                     onClick={() => task.originalTask && setSelectedTask(task.originalTask)}
                     className={`absolute h-8 rounded-lg flex items-center px-2 shadow-sm border border-black/5 ${task.color} cursor-pointer hover:scale-[1.02] transition-all z-20`}
                     style={{ left: `${new Date(task.date).getDate() * 40}px`, width: task.width }}
@@ -228,14 +219,14 @@ const Timeline: React.FC<TimelineProps> = ({ tasks, todos, onUpdateTask, sectors
                   ))}
                 </div>
                 <div className="flex gap-2">
-                   <input value={commentText} onChange={e => setCommentText(e.target.value)} className="flex-1 bg-slate-50 border rounded-xl px-4 py-2 text-xs" placeholder="Novo comentário..." />
-                   <button onClick={handleAddComment} className="bg-primary text-white p-2 rounded-xl"><span className="material-symbols-outlined text-sm">send</span></button>
+                  <input value={commentText} onChange={e => setCommentText(e.target.value)} className="flex-1 bg-slate-50 border rounded-xl px-4 py-2 text-xs" placeholder="Novo comentário..." />
+                  <button onClick={handleAddComment} className="bg-primary text-white p-2 rounded-xl"><span className="material-symbols-outlined text-sm">send</span></button>
                 </div>
               </div>
             </div>
             <div className="w-72 bg-slate-50 p-8 border-l flex flex-col gap-8">
               <button onClick={() => setSelectedTask(null)} className="text-slate-400 self-end"><span className="material-symbols-outlined">close</span></button>
-              
+
               <div className="mt-4">
                 <label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">Status</label>
                 <div className="text-sm font-bold text-slate-900">{selectedTask.status}</div>
@@ -244,8 +235,8 @@ const Timeline: React.FC<TimelineProps> = ({ tasks, todos, onUpdateTask, sectors
               <div>
                 <label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">Prazo de Entrega (Calendário)</label>
                 <div className="relative group">
-                  <input 
-                    type="date" 
+                  <input
+                    type="date"
                     value={selectedTask.dueDate}
                     onChange={(e) => {
                       const updated = { ...selectedTask, dueDate: e.target.value };

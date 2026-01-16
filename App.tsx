@@ -30,17 +30,18 @@ const App: React.FC = () => {
   useEffect(() => {
     // Check active session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
+      if (session && !currentUser) { // Only fetch if we don't have a user
         handleAuthUser(session.user.id);
-      } else {
+      } else if (!session) {
         setCurrentView(AppView.LOGIN);
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // Only react to specific events to prevent loops
+      if (event === 'SIGNED_IN' && session) {
         handleAuthUser(session.user.id);
-      } else {
+      } else if (event === 'SIGNED_OUT') {
         setCurrentUser(null);
         setCurrentView(AppView.LOGIN);
         // Clear data on logout
@@ -52,9 +53,10 @@ const App: React.FC = () => {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, []); // Run once. Dependency array empty is correct.
 
   const handleAuthUser = async (userId: string) => {
+    if (isSyncing) return; // Prevent double sync
     setIsSyncing(true);
     const data = await api.fetchInitialData();
 
@@ -68,10 +70,9 @@ const App: React.FC = () => {
       const me = data.team.find(u => u.id === userId);
       if (me) {
         setCurrentUser(me);
-        setCurrentView(AppView.DASHBOARD);
+        // Only set view if currently at login, to prevent resetting view while working
+        setCurrentView(prev => prev === AppView.LOGIN ? AppView.DASHBOARD : prev);
       } else {
-        // Fallback: This might happen if trigger hasn't run yet or fetch was too fast.
-        // In a real app, we might retry or show a loading screen.
         console.warn('User profile not found in fetched team.');
       }
     }
@@ -97,10 +98,35 @@ const App: React.FC = () => {
     }
   };
 
-  const handleAddTask = (task: Task) => {
+  const handleAddTask = async (task: Task) => {
+    // 1. Optimistic Update
     setTasks(prev => [...prev, task]);
-    api.tasks.create(task);
+
+    // 2. API Call (Must include corporation)
+    if (!currentUser) return;
+    try {
+      const savedTask = await api.tasks.create(task, currentUser.corporation);
+      // Replace optimistic ID with real UUID from DB
+      setTasks(prev => prev.map(t => t.id === task.id ? savedTask : t));
+    } catch (e) {
+      console.error("Failed to save task", e);
+      // Revert optimistic update? Or show error.
+      alert("Erro ao salvar projeto. Tente novamente.");
+      setTasks(prev => prev.filter(t => t.id !== task.id));
+    }
   };
+
+  const handleDeleteTask = async (taskId: string) => {
+    if (!confirm("Tem certeza que deseja excluir este projeto?")) return;
+    try {
+      await api.tasks.delete(taskId);
+      setTasks(prev => prev.filter(t => t.id !== taskId));
+    } catch (e) {
+      console.error("Failed to delete task", e);
+      alert("Erro ao excluir projeto.");
+    }
+  };
+
 
   const handleUpdateTask = (updatedTask: Task) => {
     setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
@@ -133,6 +159,17 @@ const App: React.FC = () => {
     api.sectors.save(newSectors);
   };
 
+  const handleDeleteSector = async (sectorId: string) => {
+    if (!confirm("Tem certeza? Isso pode afetar tarefas vinculadas.")) return;
+    try {
+      await api.sectors.delete(sectorId);
+      setSectors(prev => prev.filter(s => s.id !== sectorId));
+    } catch (e) {
+      console.error("Failed to delete sector", e);
+      alert("Erro ao excluir setor.");
+    }
+  };
+
   const handleUpdateTeam = (newTeam: User[]) => {
     setTeam(newTeam);
     api.team.save(newTeam); // Note: RLS might block if updating others
@@ -157,6 +194,7 @@ const App: React.FC = () => {
           onMoveTask={handleMoveTask}
           onAddTask={handleAddTask}
           onUpdateTask={handleUpdateTask}
+          onDeleteTask={handleDeleteTask} // New Prop
           sectors={sectors}
           team={team}
           currentUser={currentUser}
@@ -175,6 +213,7 @@ const App: React.FC = () => {
           <TeamManagement
             sectors={sectors}
             onUpdateSectors={handleUpdateSectors}
+            onDeleteSector={handleDeleteSector} // New prop
             team={team}
             onUpdateTeam={handleUpdateTeam}
           />
