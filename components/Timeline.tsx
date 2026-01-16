@@ -28,9 +28,9 @@ const Timeline: React.FC<TimelineProps> = ({ tasks, todos, onUpdateTask, sectors
         status: t.status,
         type: 'task',
         date: t.dueDate,
+        startDate: t.startDate || new Date(new Date(t.dueDate).getTime() - 7 * 86400000).toISOString(),
         originalTask: t
       }))
-      // Todos removed as per request
     ];
 
     return items.filter(item => {
@@ -45,13 +45,33 @@ const Timeline: React.FC<TimelineProps> = ({ tasks, todos, onUpdateTask, sectors
     }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [tasks, todos, filter, team]);
 
-  const displayTasks = filteredItems.map((item, i) => ({
-    ...item,
-    progress: item.status === 'Concluído' ? '100%' : '25%',
-    start: `${20 + i * 40}px`,
-    width: `${140 + (i % 3) * 40}px`,
-    color: item.status === 'Concluído' ? 'bg-slate-900' : (new Date(item.date) < new Date() ? 'bg-red-500' : 'bg-primary')
-  }));
+  const displayTasks = filteredItems.map((item, i) => {
+    // Helper to parse YYYY-MM-DD as local date to prevent timezone shifts
+    const parseLocal = (dStr: string) => {
+      if (!dStr) return new Date();
+      const clean = dStr.split('T')[0];
+      const [y, m, d] = clean.split('-').map(Number);
+      return new Date(y, m - 1, d);
+    };
+
+    const startD = parseLocal(item.startDate);
+    const endD = parseLocal(item.date);
+
+    const diffTime = endD.getTime() - startD.getTime();
+    // Ensure at least 1 day duration
+    const durationDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1);
+
+    // Position based on Day of Month (1-31)
+    const startDay = startD.getDate();
+
+    return {
+      ...item,
+      progress: item.status === 'Concluído' ? '100%' : '25%',
+      startPx: `${(startDay - 1) * 40}px`,
+      width: `${durationDays * 40}px`,
+      color: item.status === 'Concluído' ? 'bg-slate-900' : (new Date(item.date) < new Date() ? 'bg-red-500' : 'bg-primary')
+    };
+  });
 
   const updateSubTaskProgress = (stId: string, val: number) => {
     if (!selectedTask) return;
@@ -83,8 +103,6 @@ const Timeline: React.FC<TimelineProps> = ({ tasks, todos, onUpdateTask, sectors
         onUpdateTask({ ...task, dueDate: newDate });
       }
     }
-    // Note: TodoItem update would require passing setTodo to props, 
-    // but for now we focus on Tasks as requested for "Kanban-like" features.
   };
 
   return (
@@ -158,12 +176,33 @@ const Timeline: React.FC<TimelineProps> = ({ tasks, todos, onUpdateTask, sectors
 
         <div className="flex-1 overflow-x-auto custom-scrollbar bg-white">
           <div className="min-w-[1500px] h-full flex flex-col bg-[length:40px_40px] bg-[linear-gradient(to_right,#f1f5f9_1px,transparent_1px)]">
-            <div className="h-10 border-b border-slate-100 flex bg-slate-50">
-              {Array.from({ length: 5 }).map((_, w) => (
-                <div key={w} className="w-[300px] border-r flex items-center px-4">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Semana {w + 1}</span>
-                </div>
-              ))}
+            <div className="flex flex-col border-b border-slate-100 bg-slate-50 sticky top-0 z-30">
+              {/* Weeks Row */}
+              <div className="h-6 flex">
+                {Array.from({ length: 5 }).map((_, w) => (
+                  <div key={w} className="w-[280px] border-r border-slate-200/60 flex items-center justify-center">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Semana {w + 1}</span>
+                  </div>
+                ))}
+              </div>
+              {/* Days Row */}
+              <div className="h-6 flex border-t border-slate-200/60">
+                {Array.from({ length: 35 }).map((_, d) => {
+                  const date = new Date();
+                  date.setDate(1);
+                  date.setDate(d + 1);
+                  const dayNum = date.getDate();
+                  // Check if it's today (current month/year context implies relative to 'now' for this simple view)
+                  const now = new Date();
+                  const isToday = now.getDate() === dayNum && Math.abs(d + 1 - now.getDate()) < 32; // Rough check for current month view
+
+                  return (
+                    <div key={d} className={`w-[40px] border-r border-slate-100 flex items-center justify-center ${isToday ? 'bg-primary/5' : ''}`}>
+                      <span className={`text-[9px] font-bold ${isToday ? 'text-primary' : 'text-slate-400'}`}>{dayNum}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
             <div className="flex-1 relative">
               {displayTasks.map((task, i) => (
@@ -171,7 +210,7 @@ const Timeline: React.FC<TimelineProps> = ({ tasks, todos, onUpdateTask, sectors
                   <div
                     onClick={() => task.originalTask && setSelectedTask(task.originalTask)}
                     className={`absolute h-8 rounded-lg flex items-center px-2 shadow-sm border border-black/5 ${task.color} cursor-pointer hover:scale-[1.02] transition-all z-20`}
-                    style={{ left: `${new Date(task.date).getDate() * 40}px`, width: task.width }}
+                    style={{ left: task.startPx, width: task.width }}
                   >
                     <span className="text-[10px] font-bold ml-1 truncate text-white uppercase tracking-tight">{task.status}</span>
                   </div>

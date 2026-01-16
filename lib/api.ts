@@ -23,6 +23,7 @@ const mapTaskFromDB = (t: any): Task => ({
     priority: t.priority,
     projectLeadId: t.project_lead_id,
     dueDate: t.due_date,
+    startDate: t.start_date,
     sectorId: t.sector_id,
     sectors: t.sectors || (t.sector_id ? [t.sector_id] : []),
     // Assuming Task interface has sectorId or sector. Previous code used sector.id.
@@ -171,6 +172,7 @@ export const api = {
                     priority: task.priority,
                     project_lead_id: task.projectLeadId,
                     due_date: task.dueDate,
+                    start_date: task.startDate || null,
                     sector_id: task.sectorId || (task.sectors?.[0] || null),
                     sectors: task.sectors,
                     corporation: corporation
@@ -222,6 +224,7 @@ export const api = {
                     priority: task.priority,
                     project_lead_id: task.projectLeadId,
                     due_date: task.dueDate,
+                    start_date: task.startDate,
                     sector_id: task.sectorId || (task.sectors?.[0] || null),
                     sectors: task.sectors
                 })

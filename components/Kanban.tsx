@@ -34,6 +34,7 @@ const Kanban: React.FC<KanbanProps> = ({
   const [newTaskDesc, setNewTaskDesc] = useState('');
   const [newTaskLead, setNewTaskLead] = useState('');
   const [newTaskSectors, setNewTaskSectors] = useState<string[]>([]);
+  const [newTaskStartDate, setNewTaskStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [newTaskDueDate, setNewTaskDueDate] = useState(new Date().toISOString().split('T')[0]);
   const [newSubTasks, setNewSubTasks] = useState<{ userId: string, desc: string }[]>([]);
 
@@ -84,6 +85,7 @@ const Kanban: React.FC<KanbanProps> = ({
         }),
         sectors: newTaskSectors,
         sectorId: newTaskSectors[0],
+        startDate: newTaskStartDate,
         dueDate: newTaskDueDate,
         comments: tasks.find(t => t.id === editingId)?.comments || []
       };
@@ -111,6 +113,7 @@ const Kanban: React.FC<KanbanProps> = ({
         }),
         sectors: newTaskSectors,
         sectorId: newTaskSectors[0],
+        startDate: newTaskStartDate,
         dueDate: newTaskDueDate,
         comments: []
       };
@@ -127,6 +130,7 @@ const Kanban: React.FC<KanbanProps> = ({
     setNewTaskLead('');
     setNewTaskSectors([]);
     setNewSubTasks([]);
+    setNewTaskStartDate(new Date().toISOString().split('T')[0]);
     setNewTaskDueDate(new Date().toISOString().split('T')[0]);
   };
 
@@ -314,6 +318,7 @@ const Kanban: React.FC<KanbanProps> = ({
                     setNewTaskTitle(selectedTask.title);
                     setNewTaskDesc(selectedTask.description || '');
                     setNewTaskLead(selectedTask.projectLeadId);
+                    setNewTaskStartDate(selectedTask.startDate || new Date().toISOString().split('T')[0]);
                     setNewTaskDueDate(selectedTask.dueDate || new Date().toISOString().split('T')[0]);
                     setNewSubTasks(selectedTask.subTasks.map(st => ({ userId: st.userId, desc: st.taskDescription })));
                     setNewTaskSectors(selectedTask.sectors || (selectedTask.sectorId ? [selectedTask.sectorId] : []));
@@ -419,13 +424,24 @@ const Kanban: React.FC<KanbanProps> = ({
                 {newTaskSectors.length === 0 && <p className="text-[10px] text-red-500 font-bold">* Selecione ao menos um setor para ver os responsáveis.</p>}
               </div>
 
-              <div className="grid grid-cols-2 gap-4 border-t pt-4 border-slate-100">
-                <div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t pt-4 border-slate-100">
+                <div className="md:col-span-1">
                   <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Líder Responsável</label>
                   <select value={newTaskLead} onChange={e => setNewTaskLead(e.target.value)} className="w-full border-slate-200 bg-slate-50 rounded-xl py-2 px-4 text-sm" disabled={validUsers.length === 0}>
                     <option value="">{validUsers.length > 0 ? 'Selecione...' : 'Sem usuários no setor'}</option>
                     {validUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                   </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Data de Início</label>
+                  <div className="relative">
+                    <input
+                      type="date"
+                      value={newTaskStartDate}
+                      onChange={e => setNewTaskStartDate(e.target.value)}
+                      className="w-full border-slate-200 bg-slate-50 rounded-xl py-2 px-4 text-sm focus:ring-1 focus:ring-primary outline-none"
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Prazo de Entrega</label>
